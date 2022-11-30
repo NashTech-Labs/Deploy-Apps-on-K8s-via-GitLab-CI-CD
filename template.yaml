@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    ...
+    name: template-ms
+    namespace: eco-staging
+  spec:
+    replicas: 2
+    revisionHistoryLimit: 10
+    strategy:
+      rollingUpdate:
+        maxSurge: 25%
+        maxUnavailable: 25%
+      type: RollingUpdate
+    template:
+      ...
+      spec:
+        ...
+        containers:
+          ...
+          image: {IMAGE}
+          imagePullPolicy: IfNotPresent
+          ...
+          name: {NAME}
+          ports:
+            - containerPort: {PORT}
+              name: {NAME}
+              protocol: TCP
+          ...
+---
+apiVersion: networking.k8s.io/v1
+  kind: Ingress
+  metadata:
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      kubernetes.io/ingress.class: nginx
+    name: {NAME}-api
+    namespace: {NAMESPACE}
+  spec:
+    rules:
+    ...
+    - backend:
+    service:
+      name: {NAME}
+      port:
+        number: {PORT}
+    path: /{NAME}
+    pathType: ImplementationSpecific
+    ...
+---
+apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: {NAME}
+    name: {NAME}
+    namespace: {NAMESPACE}
+  spec:
+    ports:
+      - name: {NAME}
+        port: {PORT}
+        protocol: TCP
+        targetPort: {PORT}
+    selector:
+      app: {NAME}
+    sessionAffinity: None
+    type: ClusterIP

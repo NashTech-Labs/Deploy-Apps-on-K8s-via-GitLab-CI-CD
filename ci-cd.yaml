@@ -1,0 +1,38 @@
+stages:
+  - build
+  - package
+  - deploy_first
+  - deploy
+
+...
+
+deploy_first:
+  image: $KUBECTL_IMAGE
+  stage: deploy_first
+  rules:
+    - if: $FIRST_DEPLOY == "True"
+  before_script:
+    - curl -o /tmp/aws-iam-authenticator <aws-iam-authenticator-url>
+    - export PATH=$PATH:/tmp && chmod +x /tmp/aws-iam-authenticator
+    - echo ${KUBE_CONFIG} | base64 -di > $KUBECONFIG
+  script:
+    - kubectl --kubeconfig $KUBECONFIG -n $K8S_NAMESPACE get cm template-app -o jsonpath='{.data.template}' > /tmp/deploy.yaml
+    - sed -i "s/{NAME}/$NAME/g" /tmp/deploy.yaml
+    - sed -i "s/{PORT}/$PORT/g" /tmp/deploy.yaml
+    - sed -i "s/{NAMESPACE}/$K8S_STAGE_NAMESPACE/g" /tmp/deploy.yaml
+    - sed -i "s/{IMAGE}/$REPOSITORY_URL\/$IMAGE:$IMAGE_TAG/g" /tmp/deploy.yaml
+    - cat /tmp/deploy.yaml
+    - kubectl --kubeconfig $KUBECONFIG -n $K8S_NAMESPACE apply -f /tmp/deploy.yaml
+
+deploy:
+  image: $KUBECTL_IMAGE
+  stage: deploy
+  rules:
+    - if: $FIRST_DEPLOY != "True"
+  before_script:
+    - curl -o /tmp/aws-iam-authenticator <aws-iam-authenticator-url>
+    - export PATH=$PATH:/tmp && chmod +x /tmp/aws-iam-authenticator
+    - echo ${KUBE_CONFIG} | base64 -di > $KUBECONFIG
+  script:
+    - kubectl --kubeconfig $KUBECONFIG -n $K8S_NAMESPACE deployment/$K8S_DEPLOY set image $IMAGE=$REPOSITORY_URL/$IMAGE:$IMAGE_TAG
+    - kubectl --kubeconfig $KUBECONFIG -n $K8S_NAMESPACE rollout status deployment/$K8S_DEPLOY
